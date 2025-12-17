@@ -28,10 +28,14 @@
   } from "./lib/stores";
 
   // Import the new component
-  import InstrumentSelector from "./lib/InstrumentSelector.svelte";
-  import VisualizerSelector from "./lib/VisualizerSelector.svelte"; // Import the new selector
+  import ControlPanel from "./lib/ControlPanel.svelte";
+  import "../src/styles/synth-theme.css"; // Import synth theme
+
+  // import InstrumentSelector from "./lib/InstrumentSelector.svelte"; - REMOVED
+  // import VisualizerSelector from "./lib/VisualizerSelector.svelte"; - REMOVED
   import KeyboardInputHandler from "./lib/KeyboardInputHandler.svelte"; // Import Keyboard handler
   import MidiInputHandler from "./lib/MidiInputHandler.svelte"; // Import MIDI handler
+  import RecordingControls from "./lib/RecordingControls.svelte"; // Import Recording controls
 
   // --- State Variables ---
   let firstNotePlayed = false;
@@ -276,10 +280,9 @@
 </svelte:head>
 
 <main>
-  <!-- Add the Instrument Selector Component -->
-  <InstrumentSelector />
-  <!-- Add the Visualizer Selector Component -->
-  <VisualizerSelector />
+  <!-- Add the Control Panel Component -->
+  <ControlPanel />
+  <!-- InstrumentSelector and VisualizerSelector replaced by ControlPanel -->
 
   <!-- Instructions Text -->
   {#if !firstNotePlayed}
@@ -297,6 +300,9 @@
   <!-- Mount Input Handlers -->
   <KeyboardInputHandler />
   <MidiInputHandler />
+
+  <!-- Recording Controls -->
+  <RecordingControls />
 </main>
 
 <style>

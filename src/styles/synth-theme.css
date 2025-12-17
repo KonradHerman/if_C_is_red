@@ -1,0 +1,388 @@
+/* Synth Theme - Modular Synthesizer Inspired UI */
+
+:root {
+  /* === Base Colors === */
+  --synth-bg-dark: #0d0d14;
+  --synth-bg: #1a1a24;
+  --synth-panel: #252532;
+  --synth-panel-light: #2d2d3d;
+  --synth-panel-dark: #1c1c28;
+  
+  /* === Accent Colors === */
+  --synth-accent: #ff6b6b;
+  --synth-accent-hover: #ff8585;
+  --synth-accent-green: #4ade80;
+  --synth-accent-blue: #60a5fa;
+  --synth-accent-yellow: #facc15;
+  --synth-accent-purple: #a78bfa;
+  --synth-accent-orange: #fb923c;
+  
+  /* === Text Colors === */
+  --synth-text: #e0e0e8;
+  --synth-text-dim: #888895;
+  --synth-text-bright: #ffffff;
+  --synth-label: #6b6b78;
+  
+  /* === Border Colors === */
+  --synth-border: rgba(255, 255, 255, 0.08);
+  --synth-border-light: rgba(255, 255, 255, 0.12);
+  
+  /* === Effects === */
+  --synth-glow-red: 0 0 12px rgba(255, 107, 107, 0.6);
+  --synth-glow-green: 0 0 12px rgba(74, 222, 128, 0.6);
+  --synth-glow-blue: 0 0 12px rgba(96, 165, 250, 0.6);
+  --synth-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --synth-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --synth-inset: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  --synth-inset-deep: inset 0 4px 8px rgba(0, 0, 0, 0.5);
+  
+  /* === Gradients === */
+  --synth-panel-gradient: linear-gradient(180deg, var(--synth-panel-light) 0%, var(--synth-panel) 100%);
+  --synth-metal-gradient: linear-gradient(135deg, #555 0%, #333 50%, #444 100%);
+  --synth-knob-gradient: linear-gradient(135deg, #4a4a5a 0%, #2a2a3a 50%, #3a3a4a 100%);
+  
+  /* === Typography === */
+  --synth-font-display: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --synth-font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  
+  /* === Spacing === */
+  --synth-spacing-xs: 4px;
+  --synth-spacing-sm: 8px;
+  --synth-spacing-md: 16px;
+  --synth-spacing-lg: 24px;
+  --synth-spacing-xl: 32px;
+  
+  /* === Border Radius === */
+  --synth-radius-sm: 4px;
+  --synth-radius-md: 8px;
+  --synth-radius-lg: 12px;
+  --synth-radius-full: 9999px;
+}
+
+/* === VINTAGE THEME (Wood & Brass) === */
+[data-theme="vintage"] {
+  --synth-bg-dark: #1a120b;
+  --synth-bg: #2c1e14;
+  --synth-panel: #3d2b1f;
+  --synth-panel-light: #523a2a;
+  --synth-panel-dark: #26170e;
+  
+  --synth-accent: #ffb86c; /* Warm Orange */
+  --synth-accent-hover: #ffcf9e;
+  --synth-accent-green: #d4e09b; /* Muted Green */
+  --synth-accent-blue: #8be9fd;
+  
+  --synth-text: #f0e6d2; /* Cream */
+  --synth-text-dim: #a89f91;
+  --synth-label: #d4c5b0;
+  
+  --synth-border: rgba(240, 230, 210, 0.15);
+  --synth-border-light: rgba(240, 230, 210, 0.25);
+  
+  --synth-shadow: 0 4px 16px rgba(10, 5, 0, 0.6);
+  --synth-panel-gradient: linear-gradient(180deg, var(--synth-panel-light) 0%, var(--synth-panel) 100%);
+  --synth-metal-gradient: linear-gradient(135deg, #d4af37 0%, #aa8c2c 50%, #8a7020 100%); /* Gold/Brass */
+  --synth-knob-gradient: linear-gradient(135deg, #2a1d15 0%, #1a100a 100%); /* Dark Wood Knob */
+  
+  --synth-font-display: 'Georgia', serif;
+  --synth-font-mono: 'Courier New', monospace;
+  
+  --synth-radius-sm: 2px;
+  --synth-radius-md: 4px;
+  --synth-radius-lg: 6px;
+}
+
+/* === INDUSTRIAL THEME (Metal & Caution) === */
+[data-theme="industrial"] {
+  --synth-bg-dark: #0a0a0a;
+  --synth-bg: #151515;
+  --synth-panel: #222;
+  --synth-panel-light: #333;
+  --synth-panel-dark: #111;
+  
+  --synth-accent: #ffff00; /* Caution Yellow */
+  --synth-accent-hover: #ffff40;
+  --synth-accent-green: #00ff00; /* Terminal Green */
+  --synth-accent-blue: #00ffff;
+  
+  --synth-text: #d0d0d0;
+  --synth-text-dim: #707070;
+  --synth-label: #909090;
+  
+  --synth-border: #444;
+  --synth-border-light: #666;
+  
+  --synth-shadow: 0 2px 0 rgba(0,0,0,1); /* Hard shadow */
+  --synth-panel-gradient: repeating-linear-gradient(45deg, #222, #222 10px, #252525 10px, #252525 20px); /* Mesh texture approximation */
+  --synth-metal-gradient: linear-gradient(180deg, #888 0%, #444 100%);
+  --synth-knob-gradient: linear-gradient(180deg, #444 0%, #222 100%);
+  
+  --synth-font-display: 'Impact', sans-serif;
+  --synth-font-mono: 'Consolas', 'Monaco', monospace;
+  
+  --synth-radius-sm: 0px;
+  --synth-radius-md: 2px;
+  --synth-radius-lg: 4px;
+}
+
+/* === Panel Base === */
+.synth-panel {
+  background: var(--synth-panel-gradient);
+  border: 1px solid var(--synth-border);
+  border-radius: var(--synth-radius-md);
+  box-shadow: var(--synth-shadow), var(--synth-inset);
+  padding: var(--synth-spacing-md);
+  position: relative;
+}
+
+.synth-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  border-radius: var(--synth-radius-md) var(--synth-radius-md) 0 0;
+}
+
+/* === Panel Header === */
+.synth-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--synth-spacing-sm);
+  margin-bottom: var(--synth-spacing-md);
+  padding-bottom: var(--synth-spacing-sm);
+  border-bottom: 1px solid var(--synth-border);
+}
+
+.synth-panel-title {
+  font-family: var(--synth-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--synth-label);
+  margin: 0;
+}
+
+/* === LED Indicator === */
+.synth-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #222;
+  box-shadow: var(--synth-inset);
+  transition: all 0.15s ease;
+}
+
+.synth-led.on {
+  background: var(--synth-accent);
+  box-shadow: var(--synth-glow-red);
+}
+
+.synth-led.green.on {
+  background: var(--synth-accent-green);
+  box-shadow: var(--synth-glow-green);
+}
+
+.synth-led.blue.on {
+  background: var(--synth-accent-blue);
+  box-shadow: var(--synth-glow-blue);
+}
+
+/* === Button Base === */
+.synth-btn {
+  font-family: var(--synth-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--synth-text);
+  background: var(--synth-panel-dark);
+  border: 1px solid var(--synth-border-light);
+  border-radius: var(--synth-radius-sm);
+  padding: var(--synth-spacing-sm) var(--synth-spacing-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: var(--synth-shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.synth-btn:hover {
+  background: var(--synth-panel);
+  border-color: var(--synth-accent);
+  color: var(--synth-text-bright);
+}
+
+.synth-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.synth-btn.primary {
+  background: var(--synth-accent);
+  color: #fff;
+  border-color: var(--synth-accent);
+}
+
+.synth-btn.primary:hover {
+  background: var(--synth-accent-hover);
+}
+
+/* === Select/Dropdown === */
+.synth-select {
+  font-family: var(--synth-font-mono);
+  font-size: 12px;
+  color: var(--synth-text);
+  background: var(--synth-bg);
+  border: 1px solid var(--synth-border-light);
+  border-radius: var(--synth-radius-sm);
+  padding: var(--synth-spacing-sm) var(--synth-spacing-md);
+  padding-right: 32px;
+  cursor: pointer;
+  box-shadow: var(--synth-inset);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: all 0.15s ease;
+}
+
+.synth-select:hover {
+  border-color: var(--synth-accent);
+}
+
+.synth-select:focus {
+  outline: none;
+  border-color: var(--synth-accent);
+  box-shadow: var(--synth-inset), 0 0 0 2px rgba(255, 107, 107, 0.2);
+}
+
+/* === Toggle Switch === */
+.synth-toggle {
+  width: 44px;
+  height: 22px;
+  background: var(--synth-bg);
+  border-radius: var(--synth-radius-full);
+  box-shadow: var(--synth-inset-deep);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.synth-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: var(--synth-metal-gradient);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  transition: all 0.2s ease;
+}
+
+.synth-toggle.active {
+  background: rgba(255, 107, 107, 0.2);
+}
+
+.synth-toggle.active::after {
+  left: 25px;
+  background: var(--synth-accent);
+  box-shadow: var(--synth-glow-red);
+}
+
+/* === Label === */
+.synth-label {
+  font-family: var(--synth-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--synth-label);
+  display: block;
+  margin-bottom: var(--synth-spacing-xs);
+}
+
+/* === Value Display === */
+.synth-value {
+  font-family: var(--synth-font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--synth-accent);
+  background: var(--synth-bg);
+  padding: 4px 8px;
+  border-radius: var(--synth-radius-sm);
+  box-shadow: var(--synth-inset);
+  min-width: 60px;
+  text-align: center;
+}
+
+/* === Divider === */
+.synth-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--synth-border-light), transparent);
+  margin: var(--synth-spacing-md) 0;
+}
+
+/* === Control Group === */
+.synth-control-group {
+  display: flex;
+  align-items: center;
+  gap: var(--synth-spacing-sm);
+}
+
+.synth-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--synth-spacing-md);
+}
+
+/* === Patch Cable Style Connector Dots === */
+.synth-jack {
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle at 30% 30%, #555, #222);
+  border-radius: 50%;
+  border: 2px solid #333;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 1px 2px rgba(255,255,255,0.1);
+}
+
+/* === Screw Details === */
+.synth-screw {
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle at 30% 30%, #666, #333);
+  border-radius: 50%;
+  position: relative;
+}
+
+.synth-screw::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 1px;
+  background: #222;
+  transform: translate(-50%, -50%);
+}
+
+/* === Animations === */
+@keyframes synth-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes synth-glow-pulse {
+  0%, 100% { box-shadow: var(--synth-glow-red); }
+  50% { box-shadow: 0 0 20px rgba(255, 107, 107, 0.8); }
+}
+
+.synth-recording {
+  animation: synth-glow-pulse 1s ease-in-out infinite;
+}
