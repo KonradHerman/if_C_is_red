@@ -17,8 +17,8 @@
   const pixelsPerSecond = viewBoxTotalWidth / (timeWindowMs / 1000); 
   // Height config
   const viewBoxHeight = 200; // Increased height for octaves
-  const middleOctave = 4; // C4 = MIDI note 60
-  const octaveCount = 7; // How many octave slots to visualize
+  const middleOctave = 5; // Shifted up to center FFT-detected notes better
+  const octaveCount = 9; // More octave slots to visualize
   const barHeight = viewBoxHeight / octaveCount; // Height per octave slot (approx 28.5)
 
   // --- State ---

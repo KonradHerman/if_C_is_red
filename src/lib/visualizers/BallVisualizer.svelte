@@ -10,8 +10,8 @@
   // Define dimensions for the visualizer area
   const viewBoxWidth = 1000;
   const viewBoxHeight = 600; // Adjust as needed
-  const middleOctave = 4; // C4 = MIDI note 60
-  const octaveHeight = viewBoxHeight / 7; // Approx height per octave row (adjust range if needed)
+  const middleOctave = 5; // Shifted up to center FFT-detected notes better
+  const octaveHeight = viewBoxHeight / 9; // More octaves visible
   const baseRadius = 25; // Base radius for circles
 
   // --- Helper Functions ---
