@@ -168,8 +168,8 @@
         });
     }
 
-    function detectPeaks(fftData: Float32Array, threshold = -50): number[] {
-        const peaks: number[] = [];
+    function detectPeaks(fftData: Float32Array, threshold = -60): number[] {
+        const peaks: { note: number; amplitude: number }[] = [];
         const sampleRate = Tone.context.sampleRate;
         const binSize = sampleRate / 2048;
 
@@ -184,20 +184,29 @@
                 val > fftData[i + 2]
             ) {
                 const freq = i * binSize;
-                // Musical frequency range (roughly C1 to C8)
-                if (freq > 30 && freq < 4200) {
+                // Expanded musical frequency range (roughly C0 to C8)
+                if (freq > 20 && freq < 4200) {
                     const midiNote = Math.round(
                         12 * Math.log2(freq / 440) + 69,
                     );
-                    if (midiNote >= 24 && midiNote <= 108) {
-                        peaks.push(midiNote);
+                    if (midiNote >= 21 && midiNote <= 108) {
+                        peaks.push({ note: midiNote, amplitude: val });
                     }
                 }
             }
         }
 
-        // Return unique notes, max 6 strongest
-        return [...new Set(peaks)].slice(0, 6);
+        // Sort by amplitude (strongest first) and return unique notes, max 12
+        peaks.sort((a, b) => b.amplitude - a.amplitude);
+        const uniqueNotes = new Set<number>();
+        const result: number[] = [];
+        for (const peak of peaks) {
+            if (!uniqueNotes.has(peak.note) && result.length < 12) {
+                uniqueNotes.add(peak.note);
+                result.push(peak.note);
+            }
+        }
+        return result;
     }
 
     function clearAudioFile() {

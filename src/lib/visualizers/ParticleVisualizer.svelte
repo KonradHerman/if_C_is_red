@@ -9,8 +9,8 @@
   // --- Configuration ---
   const viewBoxWidth = 1200;
   const viewBoxHeight = 800;
-  const middleOctave = 4;
-  const octaveHeight = viewBoxHeight / 8;
+  const middleOctave = 5; // Shifted up to center FFT-detected notes better
+  const octaveHeight = viewBoxHeight / 10; // More octaves visible
   const particlesPerNote = 30;
   const gravity = 0.15;
   const friction = 0.99;
