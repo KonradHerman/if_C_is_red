@@ -1,45 +1,36 @@
 <script lang="ts">
-  // Import stores needed for dynamic selection
   import {
     activeNotes as activeNotesStore,
     selectedVisualizerName,
-  } from "./stores";
+  } from './stores';
 
-  // Import all possible visualizer components
-  import BallVisualizer from "./visualizers/BallVisualizer.svelte";
-  import BarsVisualizer from "./visualizers/BarsVisualizer.svelte";
-  import ParticleVisualizer from "./visualizers/ParticleVisualizer.svelte";
-  import CircularVisualizer from "./visualizers/CircularVisualizer.svelte";
+  import BallVisualizer          from './visualizers/BallVisualizer.svelte';
+  import BarsVisualizer          from './visualizers/BarsVisualizer.svelte';
+  import ParticleVisualizer      from './visualizers/ParticleVisualizer.svelte';
+  import CircularVisualizer      from './visualizers/CircularVisualizer.svelte';
+  import PianoRollVisualizer     from './visualizers/PianoRollVisualizer.svelte';
+  import HarmonicWheelVisualizer from './visualizers/HarmonicWheelVisualizer.svelte';
+  import SpectrogramVisualizer   from './visualizers/SpectrogramVisualizer.svelte';
+  import PaintingVisualizer      from './visualizers/PaintingVisualizer.svelte';
+  import ShaderVisualizer        from './visualizers/ShaderVisualizer.svelte';
+  import StarfieldVisualizer     from './visualizers/StarfieldVisualizer.svelte';
+  import KeysVisualizer          from './visualizers/KeysVisualizer.svelte';
 
-  // Map visualizer names (from store) to the imported components
-  const visualizerComponents: { [key: string]: any } = {
-    Ball: BallVisualizer,
-    Bars: BarsVisualizer,
-    Particle: ParticleVisualizer,
-    Circular: CircularVisualizer,
+  const visualizerComponents: Record<string, typeof BallVisualizer> = {
+    Ball:          BallVisualizer,
+    Bars:          BarsVisualizer,
+    Particle:      ParticleVisualizer,
+    Circular:      CircularVisualizer,
+    PianoRoll:     PianoRollVisualizer,
+    HarmonicWheel: HarmonicWheelVisualizer,
+    Spectrogram:   SpectrogramVisualizer,
+    Painting:      PaintingVisualizer,
+    Shader:        ShaderVisualizer,
+    Starfield:     StarfieldVisualizer,
+    Keys:          KeysVisualizer,
   };
 
-  // Derive the current component based on the selected name
-  $: currentVisualizerComponent = visualizerComponents[$selectedVisualizerName];
-
-  // The ActiveNote type definition is likely needed by Visualizer.svelte internally,
-  // but this wrapper doesn't need to explicitly import it unless it uses the type.
-  // import type { ActiveNote } from './stores';
-
-  // Subscribe to the activeNotes store
-  // The store holds a Map<string | number, ActiveNote>
-  // $: console.log('VisualizerWrapper: Active notes count:', $activeNotesStore.size);
+  $: current = visualizerComponents[$selectedVisualizerName] ?? BallVisualizer;
 </script>
 
-<!-- Use svelte:component to dynamically render the selected visualizer -->
-{#if currentVisualizerComponent}
-  <svelte:component
-    this={currentVisualizerComponent}
-    activeNotes={$activeNotesStore}
-  />
-{:else}
-  <!-- Optional: Fallback if the selected visualizer name is invalid -->
-  <p>Error: Visualizer '{$selectedVisualizerName}' not found.</p>
-{/if}
-
-<!-- No style needed unless wrapping element requires it -->
+<svelte:component this={current} activeNotes={$activeNotesStore} />

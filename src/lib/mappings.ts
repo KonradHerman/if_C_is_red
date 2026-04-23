@@ -1,17 +1,6 @@
-export const noteToColorMap: { [key: number]: string } = {
-  0: '#db3132', // C
-  1: '#d54bfa', // C#
-  2: '#9f70f9', // D
-  3: '#819afe', // D#
-  4: '#61acd7', // E
-  5: '#7bd8bc', // F
-  6: '#7bd559', // F#
-  7: '#8fd833', // G
-  8: '#afbc2e', // G#
-  9: '#d4a426', // A
-  10: '#e88e20', // A#
-  11: '#e3936e' // B
-};
+// Re-export color helpers for legacy callers. New code should import from
+// ./colorMappings.ts directly and use activeColorMap.
+export { colorFor, activeColorMap, COLOR_MAPPINGS } from './colorMappings';
 
 export const keyboardToNoteMap: { [key: string]: number } = {
   // Bottom Row (Notes below Middle C / C4)
@@ -45,4 +34,13 @@ export const keyboardToNoteMap: { [key: string]: number } = {
   'i': 76,  // E5
   'o': 77,  // F5
   'p': 78   // F#5
-}; 
+};
+
+/** Legacy constant noteToColorMap kept for any external code that imported it. */
+import { COLOR_MAPPINGS } from './colorMappings';
+export const noteToColorMap: { [key: number]: string } = (() => {
+  const pal = COLOR_MAPPINGS[0].colors;
+  const out: { [k: number]: string } = {};
+  pal.forEach((c, i) => { out[i] = c; });
+  return out;
+})();

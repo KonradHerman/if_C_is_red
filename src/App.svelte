@@ -1,323 +1,184 @@
-<script context="module" lang="ts">
-  // Define and export the interface from the module context
-  export interface ActiveNote {
-    id: string | number; // Unique ID (string for keyboard key+note, number for MIDI note)
-    noteNumber: number;
-    velocity: number; // Normalized 0.0 - 1.0
-  }
-</script>
-
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { noteToColorMap } from "./lib/mappings"; // Keep noteToColorMap if Visualizer needs it (indirectly)
-  import * as Tone from "tone"; // Import Tone.js
-  // Remove direct import of Visualizer
-  // import Visualizer from './lib/Visualizer.svelte';
-  // Import the wrapper instead
-  import VisualizerWrapper from "./lib/VisualizerWrapper.svelte";
-
-  // Import stores and instrument definitions
+  import { onMount } from 'svelte';
+  import * as Tone from 'tone';
+  import VisualizerWrapper from './lib/VisualizerWrapper.svelte';
   import {
-    activeNotes as activeNotesStore, // Store is now used by VisualizerWrapper
+    activeNotes as activeNotesStore,
     selectedInstrumentName as selectedInstrumentNameStore,
     isAudioReady as isAudioReadyStore,
+    isLoadingSynth as isLoadingSynthStore,
     synthInstance,
     audioControls,
-    instrumentOptions, // Import from stores
+    instrumentOptions,
     type InstrumentOption,
-  } from "./lib/stores";
+  } from './lib/stores';
+  import { getChainInput } from './lib/audioChain';
+  import { readShareFromUrl, applyShare } from './lib/shareLink';
+  import { activeColorMap } from './lib/colorMappings';
 
-  // Import the new component
-  import ControlPanel from "./lib/ControlPanel.svelte";
-  import "../src/styles/synth-theme.css"; // Import synth theme
+  import ControlPanel         from './lib/ControlPanel.svelte';
+  import KeyboardInputHandler from './lib/KeyboardInputHandler.svelte';
+  import MidiInputHandler     from './lib/MidiInputHandler.svelte';
+  import RecordingControls    from './lib/RecordingControls.svelte';
+  import HelpOverlay          from './lib/ui/HelpOverlay.svelte';
+  import OnscreenPiano        from './lib/ui/OnscreenPiano.svelte';
+  import KeyboardShortcuts    from './lib/ui/KeyboardShortcuts.svelte';
+  import './styles/synth-theme.css';
 
-  // import InstrumentSelector from "./lib/InstrumentSelector.svelte"; - REMOVED
-  // import VisualizerSelector from "./lib/VisualizerSelector.svelte"; - REMOVED
-  import KeyboardInputHandler from "./lib/KeyboardInputHandler.svelte"; // Import Keyboard handler
-  import MidiInputHandler from "./lib/MidiInputHandler.svelte"; // Import MIDI handler
-  import RecordingControls from "./lib/RecordingControls.svelte"; // Import Recording controls
-
-  // --- State Variables ---
   let firstNotePlayed = false;
   let synth: Tone.PolySynth<any> | Tone.Sampler | null = null;
-  let currentInstrumentName: string | null = null; // Track the name of the successfully setup synth
+  let currentInstrumentName: string | null = null;
+  let hasMounted = false;
+  let setupRequestId = 0;
 
-  // Map to track currently pressed keyboard keys and their Tone.js note name
-  // const pressedKeyboardKeys: Map<string, { noteName: string, noteId: string }> = new Map();
-  // Map to store keyboard note timeout IDs
-  // const keyboardTimeouts: Map<string, number> = new Map();
-
-  // Function to hide text
-  function hideText() {
-    if (!firstNotePlayed) {
-      firstNotePlayed = true;
-      console.log("App.svelte: First note played, hiding instructions.");
-    }
-  }
-
-  // Reactive statement to detect first note and hide text
   $: if (!firstNotePlayed && $activeNotesStore.size > 0) {
-    hideText();
+    firstNotePlayed = true;
   }
 
-  // --- Synth Creation/Update ---
   async function setupSynth(option: InstrumentOption) {
+    const requestId = ++setupRequestId;
+
     if (synth) {
-      if ("releaseAll" in synth) {
-        synth.releaseAll();
-      }
+      if ('releaseAll' in synth) synth.releaseAll();
       synth.dispose();
-      console.log("Previous synth disposed.");
       synth = null;
       synthInstance.set(null);
-      // Don't reset currentInstrumentName here, wait for successful setup
     }
 
-    console.log(`Setting up ${option.name}... Config:`, option.config);
-
+    isLoadingSynthStore.set(true);
     try {
-      if (option.synthType === Tone.Sampler) {
-        synth = new Tone.Sampler(
-          option.config as Partial<Tone.SamplerOptions>,
-        ).toDestination();
-        console.log(`Sampler created: ${option.name}. Waiting for samples...`);
-        await Tone.loaded();
-        console.log(`Sampler ready: ${option.name}`);
-      } else if (option.synthType === Tone.PluckSynth) {
-        // PluckSynth doesn't support PolySynth - use PolySynth with basic Synth for pluck-like sound
-        synth = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: "sine" },
-          envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.4 },
-        }).toDestination();
-        console.log(`Pluck-style PolySynth created: ${option.name}`);
-      } else if (option.synthType === Tone.MetalSynth) {
-        // MetalSynth doesn't support PolySynth - use PolySynth with FM for bell-like sound
-        synth = new Tone.PolySynth(Tone.FMSynth, {
-          harmonicity: 8,
-          modulationIndex: 20,
-          envelope: { attack: 0.001, decay: 1.2, sustain: 0, release: 0.3 },
-        }).toDestination();
-        console.log(`Bell-style PolySynth created: ${option.name}`);
-      } else if (option.synthType === Tone.MonoSynth) {
-        // MonoSynth - wrap in PolySynth with Synth and similar characteristics
-        synth = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: "sawtooth" },
-          envelope: { attack: 0.005, decay: 0.1, sustain: 0.9, release: 0.4 },
-        }).toDestination();
-        console.log(`Bass-style PolySynth created: ${option.name}`);
-      } else if (option.synthType === Tone.DuoSynth) {
-        // DuoSynth doesn't work with PolySynth - use Synth with long attack for pad sound
-        synth = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: "sine" },
-          envelope: { attack: 0.8, decay: 0.3, sustain: 0.6, release: 2 },
-        }).toDestination();
-        console.log(`Pad-style PolySynth created: ${option.name}`);
-      } else {
-        synth = new Tone.PolySynth(
-          option.synthType as any,
-          option.config,
-        ).toDestination();
-        console.log(`PolySynth created: ${option.name}`);
-      }
+      const nextSynth = option.factory();
+      nextSynth.connect(getChainInput());
       await Tone.loaded();
-      console.log(`Synth ready: ${option.name}`);
-      synthInstance.set(synth);
-      currentInstrumentName = option.name; // Update current name on success
-    } catch (error) {
-      console.error("Error during synth setup:", error);
+
+      if (requestId !== setupRequestId) {
+        if ('releaseAll' in nextSynth) nextSynth.releaseAll();
+        nextSynth.dispose();
+        return;
+      }
+
+      synth = nextSynth;
+      synthInstance.set(nextSynth);
+      currentInstrumentName = option.name;
+    } catch (e) {
+      if (requestId !== setupRequestId) return;
+      console.error('Synth setup error', e);
       synth = null;
       synthInstance.set(null);
-      currentInstrumentName = null; // Reset current name on error
+      currentInstrumentName = null;
       isAudioReadyStore.set(false);
-    }
-  }
-
-  // Reactive statement for instrument change
-  $: {
-    const requestedInstrumentName = $selectedInstrumentNameStore;
-
-    // Only proceed if the requested name is different from the current one
-    if (requestedInstrumentName !== currentInstrumentName) {
-      const newOption = instrumentOptions.find(
-        (opt: InstrumentOption) => opt.name === requestedInstrumentName,
-      );
-      if (newOption) {
-        console.log(
-          "Selected instrument store changed to:",
-          requestedInstrumentName,
-          "(Previously:",
-          currentInstrumentName,
-          ")",
-        );
-        isAudioReadyStore.set(false); // Needs re-init/check after setup
-        setupSynth(newOption); // setupSynth handles disposal and updates currentInstrumentName on success
-      } else {
-        console.warn(
-          `Instrument option not found for name: ${requestedInstrumentName}`,
-        );
+    } finally {
+      if (requestId === setupRequestId) {
+        isLoadingSynthStore.set(false);
       }
     }
   }
 
-  // Function to initialize AudioContext and ensure synth is ready
-  let isInitializing = false; // Prevent race conditions
+  $: {
+    if (hasMounted) {
+      const requested = $selectedInstrumentNameStore;
+      if (requested !== currentInstrumentName) {
+        const newOption = instrumentOptions.find((o) => o.name === requested);
+        if (newOption) {
+          isAudioReadyStore.set(false);
+          setupSynth(newOption);
+        }
+      }
+    }
+  }
+
+  let isInitializing = false;
   async function initAudio() {
     if ($isAudioReadyStore || isInitializing) return;
     isInitializing = true;
     try {
-      if (Tone.context.state !== "running") {
-        await Tone.start();
-        console.log("Audio context started by user interaction.");
-      }
+      if (Tone.context.state !== 'running') await Tone.start();
 
       let currentSynth = $synthInstance;
-      // Ensure synth instance exists (it should be set by the reactive block or initial setup)
       if (!currentSynth) {
-        console.log("Synth was null in initAudio, attempting setup...");
-        // Add type to opt
-        const currentOption = instrumentOptions.find(
-          (opt: InstrumentOption) => opt.name === $selectedInstrumentNameStore,
-        );
-        if (currentOption) {
-          await setupSynth(currentOption);
-          currentSynth = $synthInstance; // Re-check store
-        } else {
-          console.error(
-            "Cannot initialize audio: No valid instrument option found.",
-          );
-          throw new Error("Synth setup failed in initAudio");
-        }
+        const opt = instrumentOptions.find((o) => o.name === $selectedInstrumentNameStore);
+        if (opt) { await setupSynth(opt); currentSynth = $synthInstance; }
+        else throw new Error('No instrument option');
       }
 
-      // If synth exists, check if it needs loading
-      if (currentSynth instanceof Tone.Sampler && !currentSynth.loaded) {
-        console.log("Sampler awaiting Tone.loaded() in initAudio.");
-        await Tone.loaded();
-      } else if (currentSynth) {
-        // For PolySynth, ensure Tone.loaded() is complete (usually fast)
-        await Tone.loaded();
-      }
+      await Tone.loaded();
 
-      // Final check if synth is ready
       const finalSynth = $synthInstance;
-      if (
-        finalSynth &&
-        ((finalSynth instanceof Tone.Sampler && finalSynth.loaded) ||
-          !(finalSynth instanceof Tone.Sampler))
-      ) {
-        isAudioReadyStore.set(true); // Update store
-        console.log("Audio and Synth are ready.");
-      } else {
-        console.error("Synth initialization failed within initAudio.");
-        isAudioReadyStore.set(false);
-      }
+      const ok = finalSynth && (!(finalSynth instanceof Tone.Sampler) || finalSynth.loaded);
+      isAudioReadyStore.set(!!ok);
     } catch (e) {
-      console.error("Error during audio initialization:", e);
+      console.error('initAudio error', e);
       isAudioReadyStore.set(false);
     } finally {
       isInitializing = false;
     }
   }
 
-  // Provide audio control functions via the store
   onMount(() => {
-    audioControls.set({
-      initAudio: initAudio,
-      // playNote: (note, duration, time, velocity) => {
-      //   if ($isAudioReadyStore && $synthInstance) {
-      //     $synthInstance.triggerAttackRelease(note, duration, time, velocity);
-      //   }
-      // },
-      // releaseNote: (note, time) => {
-      //    if ($isAudioReadyStore && $synthInstance) {
-      //      $synthInstance.triggerRelease(note, time);
-      //    }
-      // }
+    // Apply shared URL state before anything else.
+    const shared = readShareFromUrl();
+    if (shared) applyShare(shared);
+
+    audioControls.set({ initAudio });
+    hasMounted = true;
+
+    // Make palette colors available to CSS.
+    const unsubColor = activeColorMap.subscribe((palette) => {
+      palette.forEach((c, i) => {
+        document.documentElement.style.setProperty(`--note-color-${i}`, c);
+      });
     });
 
-    // Initial synth setup based on default store value
-    // Add type to opt
-    const initialOption = instrumentOptions.find(
-      (opt: InstrumentOption) => opt.name === $selectedInstrumentNameStore,
-    );
-    if (initialOption) {
-      // Don't await here, let it setup in background. initAudio will handle waiting if needed.
-      setupSynth(initialOption);
-    }
-
-    // MIDI Setup moved to MidiInputHandler
-    // requestMIDIAccess logic removed
-
-    // Keyboard listeners moved to KeyboardInputHandler
-    // window.addEventListener logic removed
-
     return () => {
-      // Cleanup:
-      if (synth) {
-        synth.releaseAll();
-        synth.dispose();
-        console.log("Local synth disposed on component destroy.");
-      }
-      synthInstance.set(null); // Ensure store is also null
-      audioControls.set(null); // Clear controls
-      // Remove event listeners handled by child components
-
-      // Clear keyboard timeouts
-      // keyboardTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-      // keyboardTimeouts.clear();
+      if (synth) { synth.releaseAll(); synth.dispose(); }
+      synthInstance.set(null);
+      audioControls.set(null);
+      unsubColor();
     };
   });
-
-  // --- MIDI functions removed ---
-  // async function handleMIDIMessage(message: WebMidi.MIDIMessageEvent) { ... }
-  // function processMidiEvent(message: WebMidi.MIDIMessageEvent) { ... }
-
-  // --- Keyboard functions removed ---
 </script>
 
 <svelte:head>
   <title>If C Is Red</title>
+  <meta name="description" content="Play music and see it in color. A synesthetic synthesizer in the browser — keyboard, MIDI, or audio file." />
+  <meta property="og:title" content="If C Is Red" />
+  <meta property="og:description" content="Play music and see it in color." />
+  <meta property="og:type" content="website" />
 </svelte:head>
 
 <main>
-  <!-- Add the Control Panel Component -->
-  <ControlPanel />
-  <!-- InstrumentSelector and VisualizerSelector replaced by ControlPanel -->
+  <VisualizerWrapper />
 
-  <!-- Instructions Text -->
   {#if !firstNotePlayed}
-    <div class="instructions">
+    <div class="instructions" aria-live="polite">
       <h1>If C Is Red</h1>
-      <p>
-        Press any key on your keyboard or MIDI controller to hear it in color.
-      </p>
+      <p>Press any key, plug in a MIDI controller, or tap the on-screen piano.</p>
+      <p class="sub">Every note has a color — play a chord and see it bloom.</p>
     </div>
   {/if}
 
-  <!-- Use the Visualizer Wrapper Component -->
-  <VisualizerWrapper />
+  <ControlPanel />
+  <RecordingControls />
 
-  <!-- Mount Input Handlers -->
   <KeyboardInputHandler />
   <MidiInputHandler />
-
-  <!-- Recording Controls -->
-  <RecordingControls />
+  <KeyboardShortcuts />
+  <HelpOverlay />
+  <OnscreenPiano />
 </main>
 
 <style>
-  /* Keep existing global styles */
   :global(body) {
     margin: 0;
     padding: 0;
     background-color: #222;
     color: #eee;
-    overflow: hidden; /* Prevent scrollbars */
-    font-family: "Arial", sans-serif;
+    overflow: hidden;
+    font-family: var(--synth-font-display, 'Inter', system-ui, sans-serif);
   }
 
   main {
-    position: relative; /* Needed for absolute positioning of children like visualizer */
+    position: relative;
     width: 100vw;
     height: 100vh;
     display: flex;
@@ -333,23 +194,25 @@
     transform: translate(-50%, -50%);
     text-align: center;
     z-index: 10;
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 20px 40px;
-    border-radius: 10px;
-    pointer-events: none; /* Allow clicks to pass through */
-    font-family: "Helvetica", sans-serif; /* Apply Helvetica font */
+    background-color: rgba(0, 0, 0, 0.55);
+    padding: 28px 48px;
+    border-radius: 14px;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
   }
-
   .instructions h1 {
-    margin-bottom: 0.5em; /* Add some space below the heading */
-    font-size: 4em; /* Make heading larger */
-    font-weight: bold;
+    margin: 0 0 0.4em;
+    font-size: clamp(2.4em, 6vw, 4em);
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
-
   .instructions p {
-    font-size: 2em; /* Slightly larger paragraph text */
-    margin-top: 0;
+    margin: 0 0 0.3em;
+    font-size: clamp(1em, 2vw, 1.6em);
+    color: rgba(255,255,255,0.92);
   }
-
-  /* Remove Instrument Selector styles - they are in the component now */
+  .instructions .sub {
+    font-size: clamp(0.8em, 1.3vw, 1em);
+    color: rgba(255,255,255,0.55);
+  }
 </style>

@@ -1,0 +1,13 @@
+{
+  "name": "If C Is Red",
+  "short_name": "If C Is Red",
+  "description": "Play music and see it in color.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0d14",
+  "theme_color": "#1a1a24",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

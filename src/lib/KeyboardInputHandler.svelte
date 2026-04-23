@@ -1,130 +1,110 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { 
-    activeNotes as activeNotesStore, 
-    synthInstance, 
+  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import {
+    activeNotes as activeNotesStore,
+    synthInstance,
     isAudioReady as isAudioReadyStore,
-    audioControls
+    audioControls,
+    keyboardOctaveOffset,
+    sustainPedalDown,
   } from './stores';
-  import { keyboardToNoteMap } from './mappings'; // Import the keyboard map
-  import * as Tone from 'tone'; // Needed for Tone.Frequency
-  import type { ActiveNote } from '../App.svelte'; // Import ActiveNote type from App's module context
+  import { keyboardToNoteMap } from './mappings';
+  import * as Tone from 'tone';
 
-  // State moved from App.svelte
-  const pressedKeyboardKeys: Map<string, { noteName: string, noteId: string }> = new Map();
-  const keyboardTimeouts: Map<string, number> = new Map(); // Keep for potential future use, though delay removed
-  let currentAudioControls: { initAudio: () => Promise<void> } | null = null;
-  let isAudioReady = false;
+  const pressedKeyboardKeys: Map<string, { noteName: string; noteId: string }> = new Map();
+  // Notes whose physical keys were released but are held by sustain pedal.
+  const sustainedOnRelease: Set<string> = new Set();
 
-  const unsubscribeAudioControls = audioControls.subscribe(value => {
-    currentAudioControls = value;
-  });
+  // Row-based velocity so playing the bottom row punches a bit more than top.
+  function velocityForKey(key: string, shift: boolean): number {
+    const topRow    = 'qwertyuiop';
+    const midRow    = 'asdfghjkl';
+    const bottomRow = 'zxcvbnm';
+    let base = 0.7;
+    if (topRow.includes(key))    base = 0.55;
+    if (midRow.includes(key))    base = 0.72;
+    if (bottomRow.includes(key)) base = 0.88;
+    return Math.min(1, shift ? base * 1.2 : base);
+  }
 
-  const unsubscribeIsAudioReady = isAudioReadyStore.subscribe(value => {
-      isAudioReady = value;
-  });
-
-  // --- Keyboard Handling ---
   async function handleKeyDown(event: KeyboardEvent) {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
+
+    // Octave shift shortcuts.
+    if (event.key === 'ArrowUp')   { keyboardOctaveOffset.update((o) => Math.min(3, o + 1));  event.preventDefault(); return; }
+    if (event.key === 'ArrowDown') { keyboardOctaveOffset.update((o) => Math.max(-3, o - 1)); event.preventDefault(); return; }
+
     if (event.repeat || pressedKeyboardKeys.has(event.key)) return;
-    const noteNumber = keyboardToNoteMap[event.key];
-    if (noteNumber === undefined) return;
+    const baseNote = keyboardToNoteMap[event.key];
+    if (baseNote === undefined) return;
+    event.preventDefault();
 
-    if (!isAudioReady && currentAudioControls?.initAudio) {
-        try {
-            await currentAudioControls.initAudio();
-            // Re-check isAudioReady directly from the store after await, as the subscription might not have fired yet.
-            if (!$isAudioReadyStore) { 
-                console.warn("KeyboardInputHandler: Audio init successful but store not updated in time?"); 
-                return; 
-            } 
-        } catch (e) {
-             console.error("KeyboardInputHandler: Error calling initAudio:", e);
-             return;
-        }
-    } else if (!isAudioReady) { // Check local flag if initAudio wasn't called
-        return;
-    }
+    const noteNumber = baseNote + get(keyboardOctaveOffset) * 12;
+    const controls = get(audioControls);
+    if (!get(isAudioReadyStore) && controls?.initAudio) {
+      try { await controls.initAudio(); } catch (e) { return; }
+      if (!get(isAudioReadyStore)) return;
+    } else if (!get(isAudioReadyStore)) return;
 
-    const noteName = Tone.Frequency(noteNumber, "midi").toNote();
+    const noteName = Tone.Frequency(noteNumber, 'midi').toNote();
     const noteId = `key-${event.key}-${noteNumber}`;
-    const velocity = 0.7;
+    const velocity = velocityForKey(event.key, event.shiftKey);
 
     pressedKeyboardKeys.set(event.key, { noteName, noteId });
+    sustainedOnRelease.delete(noteId);
 
-    const currentSynth = $synthInstance;
-    if (currentSynth) {
-        currentSynth.triggerAttack(noteName, Tone.now(), velocity);
-        activeNotesStore.update(map => {
-            map.set(noteId, { id: noteId, noteNumber, velocity: velocity });
-            return map;
-        });
-        // REMOVED: activeNotesStore.set($activeNotesStore);
-    }
-
-    // Clear any potential lingering timeout from a previous rapid key press/release cycle
-    const existingTimeout = keyboardTimeouts.get(event.key);
-    if (existingTimeout) {
-        clearTimeout(existingTimeout);
-        keyboardTimeouts.delete(event.key);
+    const synth = get(synthInstance);
+    if (synth) {
+      synth.triggerAttack(noteName, Tone.now(), velocity);
+      activeNotesStore.update((m) => {
+        m.set(noteId, { id: noteId, noteNumber, velocity });
+        return m;
+      });
     }
   }
 
   function handleKeyUp(event: KeyboardEvent) {
-    const pressedInfo = pressedKeyboardKeys.get(event.key);
-    if (!pressedInfo) return;
+    const info = pressedKeyboardKeys.get(event.key);
+    if (!info) return;
 
-    const { noteName, noteId } = pressedInfo;
+    const { noteName, noteId } = info;
     pressedKeyboardKeys.delete(event.key);
 
-    // Clear any timeout associated with this key in case keydown added one recently
-    const existingTimeout = keyboardTimeouts.get(event.key);
-    if (existingTimeout) {
-        clearTimeout(existingTimeout);
-        keyboardTimeouts.delete(event.key);
+    if (get(sustainPedalDown)) {
+      sustainedOnRelease.add(noteId);
+      return;
     }
 
-    const currentSynth = $synthInstance;
-    if (currentSynth) {
-        // REMOVED setTimeout wrapper
-        currentSynth.triggerRelease(noteName, Tone.now());
-        activeNotesStore.update(map => {
-            map.delete(noteId);
-            return map;
-        });
-        // REMOVED: activeNotesStore.set($activeNotesStore);
-    } else {
-        // Still need to update visualizer state even if synth disappeared
-        activeNotesStore.update(map => {
-            map.delete(noteId);
-            return map;
-        });
-       // REMOVED: activeNotesStore.set($activeNotesStore);
-    }
+    const synth = get(synthInstance);
+    if (synth) synth.triggerRelease(noteName, Tone.now());
+    activeNotesStore.update((m) => { m.delete(noteId); return m; });
   }
 
-  onMount(() => {
-    console.log("KeyboardInputHandler Mounted");
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      console.log("KeyboardInputHandler Unmounting");
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      
-      // Unsubscribe from stores
-      unsubscribeAudioControls();
-      unsubscribeIsAudioReady();
-
-      // Clear any pending timeouts
-      keyboardTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-      keyboardTimeouts.clear();
-      // Optionally: Release any stuck notes if component unmounts unexpectedly?
-      // Requires access to synthInstance.releaseAll() or similar.
-    };
+  // When sustain pedal lifts, release everything we were holding.
+  sustainPedalDown.subscribe((down) => {
+    if (down) return;
+    if (sustainedOnRelease.size === 0) return;
+    const synth = get(synthInstance);
+    sustainedOnRelease.forEach((noteId) => {
+      const state = activeNotesStore;
+      const $notes = get(state);
+      const n = $notes.get(noteId);
+      if (n) {
+        const name = Tone.Frequency(n.noteNumber, 'midi').toNote();
+        synth?.triggerRelease(name, Tone.now());
+        activeNotesStore.update((m) => { m.delete(noteId); return m; });
+      }
+    });
+    sustainedOnRelease.clear();
   });
 
+  onMount(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  });
 </script>
-
-<!-- This is a script-only component, no HTML output --> 
