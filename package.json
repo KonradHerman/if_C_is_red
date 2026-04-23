@@ -20,5 +20,8 @@
   },
   "dependencies": {
     "tone": "^15.0.4"
+  },
+  "overrides": {
+    "rollup": "^4.59.0"
   }
 }
