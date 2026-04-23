@@ -12,7 +12,7 @@
     instrumentOptions,
     type InstrumentOption,
   } from './lib/stores';
-  import { getChainInput } from './lib/audioChain';
+  import { getChainInput, ensureEffects } from './lib/audioChain';
   import { readShareFromUrl, applyShare } from './lib/shareLink';
   import { activeColorMap } from './lib/colorMappings';
 
@@ -93,6 +93,10 @@
     isInitializing = true;
     try {
       if (Tone.context.state !== 'running') await Tone.start();
+
+      // Build FX nodes now that the context is running. Safe to call
+      // repeatedly; see audioChain.ensureEffects().
+      ensureEffects();
 
       let currentSynth = $synthInstance;
       if (!currentSynth) {

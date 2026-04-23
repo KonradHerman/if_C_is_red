@@ -41,18 +41,33 @@
     event.preventDefault();
 
     const noteNumber = baseNote + get(keyboardOctaveOffset) * 12;
-    const controls = get(audioControls);
-    if (!get(isAudioReadyStore) && controls?.initAudio) {
-      try { await controls.initAudio(); } catch (e) { return; }
-      if (!get(isAudioReadyStore)) return;
-    } else if (!get(isAudioReadyStore)) return;
-
     const noteName = Tone.Frequency(noteNumber, 'midi').toNote();
     const noteId = `key-${event.key}-${noteNumber}`;
     const velocity = velocityForKey(event.key, event.shiftKey);
 
+    // Register the key BEFORE any await so keyup can always find it. If
+    // the user releases mid-init the handler's sustain logic still applies.
     pressedKeyboardKeys.set(event.key, { noteName, noteId });
     sustainedOnRelease.delete(noteId);
+
+    const controls = get(audioControls);
+    if (!get(isAudioReadyStore) && controls?.initAudio) {
+      try { await controls.initAudio(); } catch (e) {
+        pressedKeyboardKeys.delete(event.key);
+        return;
+      }
+      if (!get(isAudioReadyStore)) {
+        pressedKeyboardKeys.delete(event.key);
+        return;
+      }
+    } else if (!get(isAudioReadyStore)) {
+      pressedKeyboardKeys.delete(event.key);
+      return;
+    }
+
+    // After the await, bail if the user already released or the entry was
+    // swept (e.g. by sustain-pedal lift).
+    if (!pressedKeyboardKeys.has(event.key)) return;
 
     const synth = get(synthInstance);
     if (synth) {
