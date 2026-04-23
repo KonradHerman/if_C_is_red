@@ -123,6 +123,7 @@
     width: 260px;
     max-height: calc(100vh - 32px);
     overflow-y: auto;
+    box-sizing: border-box;
 
     background: linear-gradient(180deg, var(--synth-panel-light, #2d2d3d) 0%, var(--synth-panel, #252532) 100%);
     border: 1px solid var(--synth-border, rgba(255,255,255,0.08));
