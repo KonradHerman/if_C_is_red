@@ -25,10 +25,23 @@
     playUISound('click');
   }
 
+  function targetIsEditable(target: EventTarget | null): boolean {
+    const el = target as (HTMLElement | null);
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT') {
+      const t = (el as HTMLInputElement).type;
+      if (t === 'text' || t === 'search' || t === 'url' || t === 'email' || t === 'password' || t === 'number') return true;
+      return false;
+    }
+    if (tag === 'TEXTAREA') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
   function handler(e: KeyboardEvent) {
-    // Don't intercept while typing into inputs.
-    const t = e.target as HTMLElement;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (targetIsEditable(e.target)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.key === '?' || (e.shiftKey && e.key === '/')) {
       helpOverlayVisible.update((v) => !v);

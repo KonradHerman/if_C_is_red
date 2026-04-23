@@ -36,6 +36,28 @@ export const keyboardToNoteMap: { [key: string]: number } = {
   'p': 78   // F#5
 };
 
+// Layout-independent fallback: maps physical key codes (which don't change
+// with caps lock, shift state, or keyboard layout) to the QWERTY letters
+// used in `keyboardToNoteMap`. Used when event.key lookup misses.
+export const codeToKeyMap: { [code: string]: string } = {
+  KeyZ: 'z', KeyX: 'x', KeyC: 'c', KeyV: 'v', KeyB: 'b', KeyN: 'n', KeyM: 'm',
+  KeyA: 'a', KeyS: 's', KeyD: 'd', KeyF: 'f', KeyG: 'g', KeyH: 'h', KeyJ: 'j', KeyK: 'k', KeyL: 'l',
+  KeyQ: 'q', KeyW: 'w', KeyE: 'e', KeyR: 'r', KeyT: 't', KeyY: 'y', KeyU: 'u', KeyI: 'i', KeyO: 'o', KeyP: 'p',
+};
+
+/**
+ * Resolve a KeyboardEvent to the QWERTY letter used in keyboardToNoteMap.
+ * Robust against case (shift, caps lock) and layout (AZERTY etc.) because
+ * it falls back to the physical event.code when event.key doesn't match.
+ */
+export function resolveNoteKey(e: KeyboardEvent): string | null {
+  const low = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (low in keyboardToNoteMap) return low;
+  const viaCode = codeToKeyMap[e.code];
+  if (viaCode) return viaCode;
+  return null;
+}
+
 /** Legacy constant noteToColorMap kept for any external code that imported it. */
 import { COLOR_MAPPINGS } from './colorMappings';
 export const noteToColorMap: { [key: number]: string } = (() => {

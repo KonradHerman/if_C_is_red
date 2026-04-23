@@ -9,8 +9,14 @@
     keyboardOctaveOffset,
     sustainPedalDown,
   } from './stores';
-  import { keyboardToNoteMap } from './mappings';
+  import { keyboardToNoteMap, resolveNoteKey } from './mappings';
   import * as Tone from 'tone';
+
+  // Toggle with `?keydebug` / `#keydebug` in the URL; logs every keydown the
+  // app sees. Left in production so users can self-diagnose.
+  const KEY_DEBUG = typeof window !== 'undefined'
+    && /[?#&]keydebug\b/.test(window.location.search + window.location.hash);
+  const klog = (...args: unknown[]) => { if (KEY_DEBUG) console.log('[keys]', ...args); };
 
   const pressedKeyboardKeys: Map<string, { noteName: string; noteId: string }> = new Map();
   // Notes whose physical keys were released but are held by sustain pedal.
@@ -28,63 +34,93 @@
     return Math.min(1, shift ? base * 1.2 : base);
   }
 
+  function targetIsEditable(target: EventTarget | null): boolean {
+    const el = target as (HTMLElement | null);
+    if (!el) return false;
+    const tag = el.tagName;
+    // Deliberately does NOT include generic buttons, color pickers, etc.
+    // Letter/number keys on a focused <button> should still play notes.
+    if (tag === 'INPUT') {
+      const t = (el as HTMLInputElement).type;
+      if (t === 'text' || t === 'search' || t === 'url' || t === 'email' || t === 'password' || t === 'number') return true;
+      return false;
+    }
+    if (tag === 'TEXTAREA') return true;
+    if ((el as HTMLElement).isContentEditable) return true;
+    return false;
+  }
+
   async function handleKeyDown(event: KeyboardEvent) {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
+    klog('keydown', { key: event.key, code: event.code, repeat: event.repeat, target: (event.target as HTMLElement)?.tagName });
 
-    // Octave shift shortcuts.
-    if (event.key === 'ArrowUp')   { keyboardOctaveOffset.update((o) => Math.min(3, o + 1));  event.preventDefault(); return; }
-    if (event.key === 'ArrowDown') { keyboardOctaveOffset.update((o) => Math.max(-3, o - 1)); event.preventDefault(); return; }
+    if (targetIsEditable(event.target)) { klog('skip: editable target'); return; }
 
-    if (event.repeat || pressedKeyboardKeys.has(event.key)) return;
-    const baseNote = keyboardToNoteMap[event.key];
-    if (baseNote === undefined) return;
+    // Octave shift shortcuts (let modifier-combinations through to browser).
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === 'ArrowUp')   { keyboardOctaveOffset.update((o) => Math.min(3, o + 1));  event.preventDefault(); return; }
+      if (event.key === 'ArrowDown') { keyboardOctaveOffset.update((o) => Math.max(-3, o - 1)); event.preventDefault(); return; }
+    }
+
+    // Don't steal modifier chords like Ctrl+A, Cmd+R etc.
+    if (event.ctrlKey || event.metaKey || event.altKey) { klog('skip: modifier'); return; }
+
+    const noteKey = resolveNoteKey(event);
+    if (noteKey === null) { klog('skip: unmapped', event.key, event.code); return; }
+
+    if (event.repeat || pressedKeyboardKeys.has(noteKey)) { klog('skip: repeat/held', noteKey); return; }
+
+    const mapped = keyboardToNoteMap[noteKey];
+    if (mapped === undefined) { klog('skip: no base note after resolve'); return; }
     event.preventDefault();
 
-    const noteNumber = baseNote + get(keyboardOctaveOffset) * 12;
+    const noteNumber = mapped + get(keyboardOctaveOffset) * 12;
     const noteName = Tone.Frequency(noteNumber, 'midi').toNote();
-    const noteId = `key-${event.key}-${noteNumber}`;
-    const velocity = velocityForKey(event.key, event.shiftKey);
+    const noteId = `key-${noteKey}-${noteNumber}`;
+    const velocity = velocityForKey(noteKey, event.shiftKey);
 
-    // Register the key BEFORE any await so keyup can always find it. If
-    // the user releases mid-init the handler's sustain logic still applies.
-    pressedKeyboardKeys.set(event.key, { noteName, noteId });
+    // Register BEFORE any await so keyup can always find it.
+    pressedKeyboardKeys.set(noteKey, { noteName, noteId });
     sustainedOnRelease.delete(noteId);
 
     const controls = get(audioControls);
     if (!get(isAudioReadyStore) && controls?.initAudio) {
+      klog('initAudio begin');
       try { await controls.initAudio(); } catch (e) {
-        pressedKeyboardKeys.delete(event.key);
+        console.error('[keys] initAudio threw', e);
+        pressedKeyboardKeys.delete(noteKey);
         return;
       }
-      if (!get(isAudioReadyStore)) {
-        pressedKeyboardKeys.delete(event.key);
-        return;
-      }
+      klog('initAudio end, audioReady=', get(isAudioReadyStore));
+      if (!get(isAudioReadyStore)) { pressedKeyboardKeys.delete(noteKey); return; }
     } else if (!get(isAudioReadyStore)) {
-      pressedKeyboardKeys.delete(event.key);
+      klog('skip: audio not ready and no initAudio control');
+      pressedKeyboardKeys.delete(noteKey);
       return;
     }
 
-    // After the await, bail if the user already released or the entry was
-    // swept (e.g. by sustain-pedal lift).
-    if (!pressedKeyboardKeys.has(event.key)) return;
+    if (!pressedKeyboardKeys.has(noteKey)) { klog('skip: released during init'); return; }
 
     const synth = get(synthInstance);
     if (synth) {
+      klog('triggerAttack', noteName, velocity);
       synth.triggerAttack(noteName, Tone.now(), velocity);
       activeNotesStore.update((m) => {
         m.set(noteId, { id: noteId, noteNumber, velocity });
         return m;
       });
+    } else {
+      klog('no synth instance');
     }
   }
 
   function handleKeyUp(event: KeyboardEvent) {
-    const info = pressedKeyboardKeys.get(event.key);
+    const noteKey = resolveNoteKey(event);
+    if (noteKey === null) return;
+    const info = pressedKeyboardKeys.get(noteKey);
     if (!info) return;
 
     const { noteName, noteId } = info;
-    pressedKeyboardKeys.delete(event.key);
+    pressedKeyboardKeys.delete(noteKey);
 
     if (get(sustainPedalDown)) {
       sustainedOnRelease.add(noteId);
