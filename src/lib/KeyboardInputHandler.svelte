@@ -137,10 +137,9 @@
     if (down) return;
     if (sustainedOnRelease.size === 0) return;
     const synth = get(synthInstance);
+    const notes = get(activeNotesStore);
     sustainedOnRelease.forEach((noteId) => {
-      const state = activeNotesStore;
-      const $notes = get(state);
-      const n = $notes.get(noteId);
+      const n = notes.get(noteId);
       if (n) {
         const name = Tone.Frequency(n.noteNumber, 'midi').toNote();
         synth?.triggerRelease(name, Tone.now());

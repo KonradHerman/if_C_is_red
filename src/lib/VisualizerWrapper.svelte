@@ -6,6 +6,7 @@
 
   import BallVisualizer          from './visualizers/BallVisualizer.svelte';
   import BarsVisualizer          from './visualizers/BarsVisualizer.svelte';
+  import RadialBarsVisualizer    from './visualizers/RadialBarsVisualizer.svelte';
   import ParticleVisualizer      from './visualizers/ParticleVisualizer.svelte';
   import CircularVisualizer      from './visualizers/CircularVisualizer.svelte';
   import PianoRollVisualizer     from './visualizers/PianoRollVisualizer.svelte';
@@ -19,6 +20,7 @@
   const visualizerComponents: Record<string, typeof BallVisualizer> = {
     Ball:          BallVisualizer,
     Bars:          BarsVisualizer,
+    RadialBars:    RadialBarsVisualizer,
     Particle:      ParticleVisualizer,
     Circular:      CircularVisualizer,
     PianoRoll:     PianoRollVisualizer,

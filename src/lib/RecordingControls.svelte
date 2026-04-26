@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import * as Tone from 'tone';
   import { isAudioReady } from './stores';
   import {
@@ -24,10 +24,16 @@
   let copied = false;
   let copyTimer: number | null = null;
 
-  onMount(() => {
+  // Intentionally do NOT create Tone.Recorder at mount. Constructing a
+  // MediaStreamAudioDestinationNode before a user gesture triggers Firefox's
+  // autoplay guard and can leave the node in a broken state. Lazy-create on
+  // first record click, after the AudioContext has been resumed.
+  function ensureRecorder() {
+    if (recorder) return recorder;
     recorder = new Tone.Recorder();
     getChainOutput().connect(recorder);
-  });
+    return recorder;
+  }
 
   function formatTime(s: number): string {
     const mins = Math.floor(s / 60);
@@ -36,10 +42,11 @@
   }
 
   async function startAudio() {
-    if (!recorder || !$isAudioReady) return;
+    if (!$isAudioReady) return;
+    const rec = ensureRecorder();
     if (downloadUrl) { URL.revokeObjectURL(downloadUrl); downloadUrl = null; }
     audioBlob = null;
-    await recorder.start();
+    await rec.start();
     seqStart();
     isAudioRecording = true;
     durationSec = 0;

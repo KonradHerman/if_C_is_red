@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import * as Tone from 'tone';
   import {

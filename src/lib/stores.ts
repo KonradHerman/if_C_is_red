@@ -141,6 +141,7 @@ export interface VisualizerOption {
 export const visualizerOptions: VisualizerOption[] = [
   { name: 'Ball',         label: 'Orbs',          description: 'Soft glowing orbs placed by pitch' },
   { name: 'Bars',         label: 'Bars',          description: 'Expanding time-bars, DAW style' },
+  { name: 'RadialBars',   label: 'Radial Bars',   description: 'Time-bars radiating from a central point' },
   { name: 'Particle',     label: 'Particles',     description: 'Fireworks bursting per note' },
   { name: 'Circular',     label: 'Wheel',         description: 'Chromatic circle with chord glow' },
   { name: 'PianoRoll',    label: 'Piano Roll',    description: 'Scrolling colored notes over time' },
@@ -180,6 +181,7 @@ export const helpOverlayVisible = writable<boolean>(false);
 // Runtime-only
 export const isAudioReady      = writable<boolean>(false);
 export const isLoadingSynth    = writable<boolean>(false);
+export const audioUnlockBlocked = writable<boolean>(false); // Firefox / autoplay hint
 export const synthInstance     = writable<Tone.PolySynth<any> | Tone.Sampler | null>(null);
 export const sustainPedalDown  = writable<boolean>(false);
 export const pitchBend         = writable<number>(0); // -1..1
