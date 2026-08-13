@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, beforeUpdate } from 'svelte';
-  import { activeColorMap } from '../colorMappings';
+  import { activeColorMap, colorForNote } from '../colorMappings';
   import { MIDI_A0, MIDI_C8, pitchClass } from '../noteGeometry';
   import type { ActiveNote } from '../stores';
 
@@ -114,7 +114,7 @@
       {@const w = Math.max(0.5, Math.min(100, endX) - x)}
       {@const y = ((highNote - b.note) / noteRange) * 100}
       {@const h = 100 / noteRange * 1.15}
-      {@const c = $activeColorMap[pitchClass(b.note)] || '#888'}
+      {@const c = colorForNote(b.note, $activeColorMap)}
       {#if x < 100 && x + w > 0}
         <rect
           {x} {y} width={w} height={h}

@@ -1,13 +1,18 @@
 <script lang="ts">
   import { onMount, beforeUpdate } from 'svelte';
-  import { activeColorMap } from '../colorMappings';
+  import { activeColorMap, colorForNote } from '../colorMappings';
   import { pitchClass, octave } from '../noteGeometry';
+  import { barsSpeed } from '../stores';
   import type { ActiveNote } from '../stores';
 
   export let activeNotes: Map<string | number, ActiveNote> = new Map();
 
-  const timeWindowMs = 5000;
-  const expansionRate = 200;
+  const baseWindowMs = 5000;
+  const baseExpansionRate = 200;
+
+  // Faster speed = wedges expand outward quicker and leave the screen sooner.
+  $: timeWindowMs = baseWindowMs / $barsSpeed;
+  $: expansionRate = baseExpansionRate * $barsSpeed;
   const viewBoxHalf = 600;
   const viewBoxSize = viewBoxHalf * 2;
   const centerFadeRadius = 40;
@@ -58,7 +63,7 @@
   let prevActiveIds: Set<string | number> = new Set();
 
   function colorFor(noteNumber: number, map: string[]): string {
-    return map[pitchClass(noteNumber)] || '#888';
+    return colorForNote(noteNumber, map);
   }
 
   onMount(() => {

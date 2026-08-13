@@ -4,6 +4,8 @@
     isPanelCollapsed,
     onscreenPianoVisible,
     helpOverlayVisible,
+    selectedVisualizerName,
+    BAR_VISUALIZERS,
   } from './stores';
   import { playUISound } from './ui/UISounds';
 
@@ -16,6 +18,7 @@
   import MidiDevicePicker    from './ui/MidiDevicePicker.svelte';
   import EffectsRack         from './ui/EffectsRack.svelte';
   import DemoGallery         from './ui/DemoGallery.svelte';
+  import BarsSpeedControl    from './ui/BarsSpeedControl.svelte';
 
   function toggleCollapsed() {
     isPanelCollapsed.update((v) => !v);
@@ -44,8 +47,11 @@
     <span class="led" class:on={$isAudioReady}></span>
     <span class="puck-label">If C Is Red</span>
   </button>
-{:else}
-  <div class="control-panel" role="region" aria-label="Controls">
+{/if}
+
+<!-- Hidden with CSS (not {#if}) when collapsed so stateful children like
+     AudioFileInput keep their loaded file and playback alive. -->
+<div class="control-panel" class:collapsed={$isPanelCollapsed} role="region" aria-label="Controls">
     <!-- Header -->
     <div class="panel-header">
       <div class="header-left">
@@ -91,6 +97,9 @@
       <div class="panel-divider"></div>
       <InstrumentSelector />
       <VisualizerSelector />
+      {#if BAR_VISUALIZERS.includes($selectedVisualizerName)}
+        <BarsSpeedControl />
+      {/if}
 
       <div class="panel-divider"></div>
       <ColorMappingEditor />
@@ -112,7 +121,6 @@
       </div>
     </div>
   </div>
-{/if}
 
 <style>
   .control-panel {
@@ -137,6 +145,7 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.12) transparent;
   }
+  .control-panel.collapsed { display: none; }
   .control-panel::-webkit-scrollbar { width: 6px; }
   .control-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
 

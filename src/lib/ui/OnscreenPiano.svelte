@@ -9,8 +9,7 @@
     onscreenPianoVisible,
     synthInstance,
   } from '../stores';
-  import { activeColorMap } from '../colorMappings';
-  import { pitchClass } from '../noteGeometry';
+  import { activeColorMap, colorForNote } from '../colorMappings';
 
   const firstWhiteOctave = 3; // C3
   const octaves = 3;
@@ -37,14 +36,18 @@
   }
 
   async function press(note: number, pointerId: number, velocity = 0.8) {
+    // Register BEFORE the (potentially slow) audio init so a quick tap's
+    // pointerup can always find and cancel this press instead of leaving
+    // the note stuck.
+    pressedPointerIds.set(pointerId, note);
     await ensureAudio();
+    if (pressedPointerIds.get(pointerId) !== note) return; // released during init
     const synth = get(synthInstance);
-    if (!synth) return;
+    if (!synth) { pressedPointerIds.delete(pointerId); return; }
     const id = `piano-${note}`;
     const name = Tone.Frequency(note, 'midi').toNote();
     synth.triggerAttack(name, Tone.now(), velocity);
     activeNotes.update((m) => { m.set(id, { id, noteNumber: note, velocity }); return m; });
-    pressedPointerIds.set(pointerId, note);
   }
 
   function release(pointerId: number) {
@@ -65,10 +68,15 @@
   function handlePointerUp(e: PointerEvent)    { release(e.pointerId); }
   function handlePointerCancel(e: PointerEvent) { release(e.pointerId); }
 
-  onDestroy(() => {
-    // Release any stuck notes.
+  function releaseAll() {
     pressedPointerIds.forEach((_, pid) => release(pid));
-  });
+  }
+
+  // Hiding the piano removes the key buttons; release anything still held
+  // so no note keeps sounding with no way to stop it.
+  $: if (!$onscreenPianoVisible) releaseAll();
+
+  onDestroy(releaseAll);
 
   function toggle() { onscreenPianoVisible.update((v) => !v); }
 </script>
@@ -81,7 +89,7 @@
     >
       {#each keys as key (key.note)}
         {#if !key.isBlack}
-          {@const c = $activeColorMap[pitchClass(key.note)]}
+          {@const c = colorForNote(key.note, $activeColorMap)}
           {@const active = [...$activeNotes.values()].some(n => n.noteNumber === key.note)}
           <button
             class="white"
@@ -97,7 +105,7 @@
       {/each}
       {#each keys as key (key.note + '-black')}
         {#if key.isBlack}
-          {@const c = $activeColorMap[pitchClass(key.note)]}
+          {@const c = colorForNote(key.note, $activeColorMap)}
           {@const active = [...$activeNotes.values()].some(n => n.noteNumber === key.note)}
           <button
             class="black"

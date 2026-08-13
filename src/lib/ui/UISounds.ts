@@ -2,6 +2,7 @@
 // Generates simple synth sounds for tactile feedback
 
 import * as Tone from 'tone';
+import { getChainOutput } from '../audioChain';
 
 // Cached synth instances for UI sounds
 let uiSynth: Tone.Synth | null = null;
@@ -15,6 +16,9 @@ let uiVolume = -20; // dB
 function ensureInitialized() {
     if (isInitialized) return;
 
+    // Route through the master gain (not straight to destination) so the
+    // volume knob and Mute apply to UI feedback too. Connecting at the
+    // chain output keeps the clicks dry — no reverb/delay tail.
     uiSynth = new Tone.Synth({
         oscillator: { type: 'sine' },
         envelope: {
@@ -23,7 +27,7 @@ function ensureInitialized() {
             sustain: 0,
             release: 0.05
         }
-    }).toDestination();
+    }).connect(getChainOutput());
     uiSynth.volume.value = uiVolume;
 
     noiseSynth = new Tone.NoiseSynth({
@@ -34,7 +38,7 @@ function ensureInitialized() {
             sustain: 0,
             release: 0.02
         }
-    }).toDestination();
+    }).connect(getChainOutput());
     noiseSynth.volume.value = uiVolume - 10;
 
     isInitialized = true;

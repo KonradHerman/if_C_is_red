@@ -19,6 +19,7 @@
     "vite": "^6.2.0"
   },
   "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
     "tone": "^15.0.4"
   },
   "overrides": {

@@ -3,6 +3,8 @@ import {
   selectedInstrumentName,
   selectedVisualizerName,
   selectedTheme,
+  isKnownVisualizer,
+  isKnownInstrument,
 } from './stores';
 import { selectedColorMappingId, customColors } from './colorMappings';
 import { recordedSeq, type Sequence } from './sequencer';
@@ -56,8 +58,10 @@ export function readShareFromUrl(): SharePayload | null {
 }
 
 export function applyShare(payload: SharePayload) {
-  if (payload.i) selectedInstrumentName.set(payload.i);
-  if (payload.v) selectedVisualizerName.set(payload.v);
+  // Older links may name an instrument or visualizer that no longer exists;
+  // ignore those rather than stranding the app on an unresolvable selection.
+  if (payload.i && isKnownInstrument(payload.i)) selectedInstrumentName.set(payload.i);
+  if (payload.v && isKnownVisualizer(payload.v)) selectedVisualizerName.set(payload.v);
   if (payload.t) selectedTheme.set(payload.t);
   if (payload.cm) selectedColorMappingId.set(payload.cm);
   if (payload.cc) customColors.set(payload.cc);

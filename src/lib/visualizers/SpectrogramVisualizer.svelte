@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { activeColorMap } from '../colorMappings';
+  import { activeColorMap, colorForNote } from '../colorMappings';
   import { MIDI_A0, MIDI_C8, pitchClass } from '../noteGeometry';
   import type { ActiveNote } from '../stores';
 
@@ -14,7 +14,7 @@
   let raf = 0;
   let width = 0;
   let height = 0;
-  let colsWritten = 0;
+  let dpr = 1;
 
   const lowNote  = MIDI_A0;
   const highNote = MIDI_C8;
@@ -22,7 +22,7 @@
 
   function resize() {
     if (!canvas) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
     width  = window.innerWidth;
     height = window.innerHeight;
     canvas.width  = width  * dpr;
@@ -31,15 +31,21 @@
     canvas.style.height = height + 'px';
     ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
-    colsWritten = 0;
   }
 
   function drawFrame() {
     if (!ctx) return;
 
-    // Scroll everything left by 1 pixel column.
-    const img = ctx.getImageData(1, 0, Math.max(1, width - 1), height);
-    ctx.putImageData(img, 0, 0);
+    // Scroll everything left by 1 CSS pixel via a self-blit. drawImage
+    // source coords are device pixels while dest coords go through the
+    // dpr transform — mixing these up (or using getImageData, which also
+    // works in device pixels AND forces a GPU→CPU readback every frame)
+    // is what broke scrolling on HiDPI displays.
+    ctx.drawImage(
+      canvas,
+      dpr, 0, canvas.width - dpr, canvas.height, // src (device px)
+      0, 0, width - 1, height,                   // dest (CSS px)
+    );
 
     // Clear rightmost column by painting background.
     ctx.fillStyle = '#08080f';
@@ -50,14 +56,13 @@
     activeNotes.forEach((n) => {
       const y = ((highNote - n.noteNumber) / noteRange) * height;
       const h = Math.max(1.5, height / noteRange);
-      const c = palette[pitchClass(n.noteNumber)] || '#888';
+      const c = colorForNote(n.noteNumber, palette);
       ctx!.fillStyle = c;
       ctx!.globalAlpha = 0.4 + n.velocity * 0.6;
       ctx!.fillRect(width - 1, y - h / 2, 1, h);
       ctx!.globalAlpha = 1;
     });
 
-    colsWritten = Math.min(colsWritten + 1, width);
     raf = requestAnimationFrame(drawFrame);
   }
 

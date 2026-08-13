@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import * as Tone from 'tone';
 import { persisted } from './persist';
 import { detectChord } from './chordDetection';
@@ -141,14 +141,12 @@ export interface VisualizerOption {
 export const visualizerOptions: VisualizerOption[] = [
   { name: 'Ball',         label: 'Orbs',          description: 'Soft glowing orbs placed by pitch' },
   { name: 'Bars',         label: 'Bars',          description: 'Expanding time-bars, DAW style' },
+  { name: 'OctaveBars',   label: 'Octave Bars',   description: 'Time-bars with a fixed lane per octave' },
   { name: 'RadialBars',   label: 'Radial Bars',   description: 'Time-bars radiating from a central point' },
-  { name: 'Particle',     label: 'Particles',     description: 'Fireworks bursting per note' },
   { name: 'Circular',     label: 'Wheel',         description: 'Chromatic circle with chord glow' },
   { name: 'PianoRoll',    label: 'Piano Roll',    description: 'Scrolling colored notes over time' },
   { name: 'HarmonicWheel',label: 'Tonnetz',       description: 'Circle of fifths + chord readout' },
   { name: 'Spectrogram',  label: 'Spectrogram',   description: 'Rolling FFT heatmap in note colors' },
-  { name: 'Painting',     label: 'Painting',      description: 'Cumulative brushstrokes on canvas' },
-  { name: 'Shader',       label: 'Shader',        description: 'GLSL flow field driven by notes' },
   { name: 'Starfield',    label: 'Constellation', description: 'Stars spawn and link as chords' },
   { name: 'Keys',         label: 'Keys',          description: 'On-screen piano lit by color' },
 ];
@@ -161,9 +159,34 @@ const defaultVisualizerName = 'Ball';
 
 export const selectedInstrumentName = persisted<string>('instrument', defaultInstrumentName);
 export const selectedVisualizerName = persisted<string>('visualizer', defaultVisualizerName);
+
+export const isKnownVisualizer = (name: string): boolean =>
+  visualizerOptions.some((o) => o.name === name);
+export const isKnownInstrument = (name: string): boolean =>
+  instrumentOptions.some((o) => o.name === name);
+
+// A stored selection can name something that no longer exists (a visualizer
+// removed since it was saved). Left alone it strands the UI: the selector
+// highlights nothing, and for instruments App.svelte's lookup finds no option
+// so no synth is ever built.
+if (!isKnownVisualizer(get(selectedVisualizerName))) {
+  selectedVisualizerName.set(defaultVisualizerName);
+}
+if (!isKnownInstrument(get(selectedInstrumentName))) {
+  selectedInstrumentName.set(defaultInstrumentName);
+}
 export const selectedTheme = persisted<string>('theme', 'default');
 
 export const keyboardOctaveOffset = persisted<number>('kbOctave', 0);
+
+/**
+ * Scroll rate for the time-bar visualizers, as a multiple of the 5s default
+ * window. Higher = bars travel faster and less history stays on screen.
+ */
+export const barsSpeed = persisted<number>('barsSpeed', 1);
+
+/** Visualizers driven by the shared time-bar scroll rate. */
+export const BAR_VISUALIZERS = ['Bars', 'OctaveBars', 'RadialBars'];
 
 export const masterVolume = persisted<number>('masterVolume', 80);  // 0-100
 export const reverbAmount = persisted<number>('reverbAmount', 15);  // 0-100 wet %

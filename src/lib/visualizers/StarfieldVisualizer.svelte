@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, beforeUpdate } from 'svelte';
-  import { activeColorMap } from '../colorMappings';
+  import { activeColorMap, colorForNote } from '../colorMappings';
   import { pitchClass } from '../noteGeometry';
   import type { ActiveNote } from '../stores';
 
@@ -120,7 +120,7 @@
           x: baseX + (Math.random() - 0.5) * 60,
           y: baseY + (Math.random() - 0.5) * 60,
           r: 1.6 + n.velocity * 2.5,
-          color: palette[pc] || '#fff',
+          color: colorForNote(n.noteNumber, palette),
           born: performance.now(),
           life: 3500 + Math.random() * 1500,
         });

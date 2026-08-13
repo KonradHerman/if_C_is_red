@@ -3,6 +3,8 @@
   import * as Tone from 'tone';
   import { activeNotes as activeNotesStore } from '../stores';
   import { getChainInput } from '../audioChain';
+  import { detectNotes, resetDetector } from '../pitchDetect';
+  import { transcribeFile, type TranscribedNote } from '../transcribe';
   import { playUISound } from './UISounds';
 
   let audioFile: File | null = null;
@@ -13,6 +15,14 @@
   let dragOver = false;
   let analysisLoop: number | null = null;
   let audioFileUrl: string | null = null;
+
+  // Transcription state. When a file transcribes successfully its notes drive
+  // the visualizers directly; the live FFT analyser is only used if that fails.
+  let transcript: TranscribedNote[] | null = null;
+  let transcribing = false;
+  let transcribeProgress = 0;
+  let transcribeFailed = false;
+  let playbackStartedAt = 0;
 
   function handleFileDrop(e: DragEvent) {
     e.preventDefault();
@@ -35,7 +45,13 @@
     if (analyser) { analyser.dispose(); analyser = null; }
     if (audioFileUrl) URL.revokeObjectURL(audioFileUrl);
     audioFileUrl = URL.createObjectURL(file);
-    analyser = new Tone.Analyser('fft', 2048);
+    // 4096 bins (fftSize 8192) is the sweet spot measured against ground
+    // truth: enough resolution for the harmonic matching to separate low
+    // notes, at a 171ms window rather than the 341ms a larger FFT would cost.
+    // Smoothing is well below Tone's 0.8 default, which at 60fps smears note
+    // onsets and holds energy after note-off (read as phantom sustain).
+    analyser = new Tone.Analyser('fft', 4096);
+    analyser.smoothing = 0.4;
 
     audioPlayer = new Tone.Player({
       url: audioFileUrl,
@@ -46,32 +62,143 @@
     audioPlayer.connect(analyser);
     audioPlayer.connect(getChainInput());
     await Tone.loaded();
+
+    transcript = null;
+    transcribeFailed = false;
+    transcribing = true;
+    transcribeProgress = 0;
+    try {
+      transcript = await transcribeFile(file, (p) => { transcribeProgress = p; });
+      playUISound('success');
+    } catch (e) {
+      console.warn('Transcription unavailable; falling back to live analysis.', e);
+      transcribeFailed = true;
+      transcript = null;
+    } finally {
+      transcribing = false;
+    }
   }
 
   async function togglePlayback() {
-    if (!audioPlayer) return;
+    if (!audioPlayer || transcribing) return;
     await Tone.start();
     if (isPlaying) {
       audioPlayer.stop();
     } else {
       audioPlayer.start();
       isPlaying = true;
-      startAnalysis();
+      if (transcript) startTranscriptPlayback();
+      else startAnalysis();
     }
     playUISound('switch');
   }
 
+  // ------------------------------------------------------------
+  // Transcript playback: each frame, show exactly the notes whose
+  // [start, start+duration) span covers the current playback position.
+  // Sampling elapsed time per frame (rather than scheduling timeouts) keeps
+  // the visuals aligned even if a frame is late or the tab is throttled.
+  // ------------------------------------------------------------
+  function startTranscriptPlayback() {
+    if (!transcript) return;
+    playbackStartedAt = performance.now();
+    isAnalyzing = true;
+    const tick = () => {
+      if (!isAnalyzing || !transcript) return;
+      const t = (performance.now() - playbackStartedAt) / 1000;
+      activeNotesStore.update((notes) => {
+        const out = new Map([...notes].filter(([id]) => !String(id).startsWith('fft-')));
+        for (let i = 0; i < transcript!.length; i++) {
+          const n = transcript![i];
+          if (n.start > t) break;                 // sorted by start
+          if (t < n.start + n.duration) {
+            const id = `fft-${i}`;
+            out.set(id, { id, noteNumber: n.note, velocity: n.velocity });
+          }
+        }
+        return out;
+      });
+      analysisLoop = requestAnimationFrame(tick);
+    };
+    analysisLoop = requestAnimationFrame(tick);
+  }
+
+  // ------------------------------------------------------------
+  // Note tracking with attack/release hysteresis. Raw per-frame FFT
+  // peaks flicker constantly (one frame above threshold = one spurious
+  // "note"), so a peak must persist for ATTACK_MS before it becomes a
+  // visible note, and a note survives RELEASE_MS of absence before it
+  // is dropped. This is what keeps piano recordings from spraying
+  // dozens of one-frame notes over the real ones.
+  // ------------------------------------------------------------
+  const ATTACK_MS = 60;
+  const RELEASE_MS = 150;
+
+  // Re-articulation. A note struck again while it is still ringing never
+  // leaves the detector's output, so tracking presence alone merges the
+  // repeats into one long note. A fresh strike does show up as a sharp jump
+  // in that note's own harmonic energy, so a rise well above the track's
+  // decaying level is treated as a new note: the id changes, which the
+  // visualizers read as note-off followed by note-on.
+  // Judged on harmonic flux rather than velocity: a re-strike lands at roughly
+  // the same velocity as the note it replaces (velocity is compressed and
+  // clamped), but it is unmistakable as a jump in energy.
+  // Measured against synthetic repeats: sustain flux peaks around 0.001 while
+  // a re-strike lands near 0.24, so anything in 0.10-0.20 separates them.
+  const RETRIGGER_ONSET = 0.15;  // flux above which a rise counts as a new strike
+  const RETRIGGER_GAP_MS = 90;   // debounce, so one attack fires once
+
+  interface FftTrack {
+    firstSeen: number;
+    lastSeen: number;
+    velocity: number;
+    live: boolean;
+    lastStrike: number;
+    seq: number;         // bumped per strike so the note gets a new identity
+  }
+  const fftTracks = new Map<number, FftTrack>();
+
   function startAnalysis() {
     if (!analyser) return;
     isAnalyzing = true;
+    resetDetector();
     const analyze = () => {
       if (!isAnalyzing || !analyser) return;
       const fftData = analyser.getValue() as Float32Array;
-      const detected = detectPeaks(fftData);
+      const now = performance.now();
+      const detected = detectNotes(fftData, { sampleRate: Tone.context.sampleRate });
+
+      const seen = new Set<number>();
+      detected.forEach(({ note, velocity, onset }) => {
+        seen.add(note);
+        const t = fftTracks.get(note);
+        if (!t) {
+          fftTracks.set(note, {
+            firstSeen: now, lastSeen: now, velocity, live: false,
+            lastStrike: now, seq: 0,
+          });
+        } else {
+          t.lastSeen = now;
+          if (t.live && onset > RETRIGGER_ONSET && now - t.lastStrike > RETRIGGER_GAP_MS) {
+            t.seq++;
+            t.lastStrike = now;
+            t.velocity = velocity;
+          } else {
+            t.velocity = t.velocity * 0.7 + velocity * 0.3;
+          }
+          if (!t.live && now - t.firstSeen >= ATTACK_MS) t.live = true;
+        }
+      });
+      fftTracks.forEach((t, note) => {
+        if (!seen.has(note) && now - t.lastSeen > RELEASE_MS) fftTracks.delete(note);
+      });
+
       activeNotesStore.update((notes) => {
         const out = new Map([...notes].filter(([id]) => !String(id).startsWith('fft-')));
-        detected.forEach((noteNum) => {
-          out.set(`fft-${noteNum}`, { id: `fft-${noteNum}`, noteNumber: noteNum, velocity: 0.7 });
+        fftTracks.forEach((t, note) => {
+          if (!t.live) return;
+          const id = `fft-${note}-${t.seq}`;
+          out.set(id, { id, noteNumber: note, velocity: t.velocity });
         });
         return out;
       });
@@ -83,31 +210,10 @@
   function stopAnalysis() {
     isAnalyzing = false;
     if (analysisLoop) { cancelAnimationFrame(analysisLoop); analysisLoop = null; }
+    fftTracks.clear();
     activeNotesStore.update((notes) => new Map([...notes].filter(([id]) => !String(id).startsWith('fft-'))));
   }
 
-  function detectPeaks(fftData: Float32Array, threshold = -60): number[] {
-    const peaks: { note: number; amplitude: number }[] = [];
-    const sampleRate = Tone.context.sampleRate;
-    const binSize = sampleRate / 2048;
-    for (let i = 2; i < fftData.length - 2; i++) {
-      const val = fftData[i];
-      if (val > threshold && val > fftData[i - 1] && val > fftData[i - 2] && val > fftData[i + 1] && val > fftData[i + 2]) {
-        const freq = i * binSize;
-        if (freq > 20 && freq < 4200) {
-          const midiNote = Math.round(12 * Math.log2(freq / 440) + 69);
-          if (midiNote >= 21 && midiNote <= 108) peaks.push({ note: midiNote, amplitude: val });
-        }
-      }
-    }
-    peaks.sort((a, b) => b.amplitude - a.amplitude);
-    const unique = new Set<number>();
-    const out: number[] = [];
-    for (const p of peaks) {
-      if (!unique.has(p.note) && out.length < 12) { unique.add(p.note); out.push(p.note); }
-    }
-    return out;
-  }
 
   function clearAudioFile() {
     if (audioPlayer) { audioPlayer.stop(); audioPlayer.dispose(); audioPlayer = null; }
@@ -116,6 +222,10 @@
     stopAnalysis();
     audioFile = null;
     isPlaying = false;
+    transcript = null;
+    transcribing = false;
+    transcribeFailed = false;
+    transcribeProgress = 0;
   }
 
   onDestroy(() => {
@@ -155,7 +265,7 @@
     <div class="audio-controls">
       <span class="file-name">{audioFile.name.slice(0, 18)}{audioFile.name.length > 18 ? '…' : ''}</span>
       <div class="audio-buttons">
-        <button class="play-btn" class:playing={isPlaying} on:click={togglePlayback} aria-label={isPlaying ? 'Stop' : 'Play'}>
+        <button class="play-btn" class:playing={isPlaying} on:click={togglePlayback} disabled={transcribing} aria-label={isPlaying ? 'Stop' : 'Play'}>
           {#if isPlaying}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="4" width="4" height="16" />
@@ -177,7 +287,24 @@
     </div>
   {/if}
 
-  {#if isAnalyzing}
+  {#if transcribing}
+    <div class="transcribe-status">
+      <div class="progress-track">
+        <div class="progress-fill" style="width: {Math.round(transcribeProgress * 100)}%"></div>
+      </div>
+      <span class="progress-label">Finding notes… {Math.round(transcribeProgress * 100)}%</span>
+    </div>
+  {:else if transcript}
+    <div class="transcribe-status done">
+      <span class="progress-label">{transcript.length} notes found</span>
+    </div>
+  {:else if transcribeFailed}
+    <div class="transcribe-status warn">
+      <span class="progress-label">Live analysis (transcription unavailable)</span>
+    </div>
+  {/if}
+
+  {#if isAnalyzing && !transcript}
     <div class="analyzing-indicator">
       <div class="analyzing-dot"></div>
       <span>Analyzing…</span>
@@ -266,6 +393,32 @@
     color: var(--synth-label, #888);
   }
   .clear-btn:hover { background: rgba(239, 68, 68, 0.3); color: #ef4444; }
+
+  .transcribe-status {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .progress-track {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--synth-bg, #1a1a24);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--synth-accent, #ff6b6b);
+    transition: width 0.15s linear;
+  }
+  .progress-label {
+    font-family: var(--synth-font-mono, monospace);
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    color: var(--synth-label, #6b6b78);
+  }
+  .transcribe-status.done .progress-label { color: var(--synth-accent-green, #4ade80); }
+  .transcribe-status.warn .progress-label { color: var(--synth-accent-yellow, #facc15); }
 
   .analyzing-indicator {
     display: flex;

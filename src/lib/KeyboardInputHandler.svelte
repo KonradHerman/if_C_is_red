@@ -149,12 +149,44 @@
     sustainedOnRelease.clear();
   });
 
+  // Cmd/Alt-Tab away swallows the keyup for any held key, so release
+  // everything when the window loses focus or the tab is hidden.
+  function releaseAllKeys() {
+    if (pressedKeyboardKeys.size === 0 && sustainedOnRelease.size === 0) return;
+    const synth = get(synthInstance);
+    const released = new Set<string>();
+    pressedKeyboardKeys.forEach(({ noteName, noteId }) => {
+      synth?.triggerRelease(noteName, Tone.now());
+      released.add(noteId);
+    });
+    pressedKeyboardKeys.clear();
+    const notes = get(activeNotesStore);
+    sustainedOnRelease.forEach((noteId) => {
+      const n = notes.get(noteId);
+      if (n) synth?.triggerRelease(Tone.Frequency(n.noteNumber, 'midi').toNote(), Tone.now());
+      released.add(noteId);
+    });
+    sustainedOnRelease.clear();
+    activeNotesStore.update((m) => {
+      released.forEach((id) => m.delete(id));
+      return m;
+    });
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) releaseAllKeys();
+  }
+
   onMount(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', releaseAllKeys);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', releaseAllKeys);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   });
 </script>

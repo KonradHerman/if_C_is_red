@@ -19,15 +19,17 @@
     // Convert value to rotation angle (-135 to 135 degrees)
     $: rotation = ((value - min) / (max - min)) * 270 - 135;
 
-    function handleMouseDown(e: MouseEvent) {
+    // Pointer events + capture cover mouse, touch, and pen with one code
+    // path — mouse-only handlers left the knobs dead on touch screens.
+    function handlePointerDown(e: PointerEvent) {
         isDragging = true;
         startY = e.clientY;
         startValue = value;
-        window.addEventListener("mousemove", handleMouseMove);
-        window.addEventListener("mouseup", handleMouseUp);
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+        e.preventDefault();
     }
 
-    function handleMouseMove(e: MouseEvent) {
+    function handlePointerMove(e: PointerEvent) {
         if (!isDragging) return;
 
         const deltaY = startY - e.clientY;
@@ -43,10 +45,9 @@
         dispatch("change", { value });
     }
 
-    function handleMouseUp() {
+    function handlePointerUp() {
+        if (!isDragging) return;
         isDragging = false;
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
         dispatch("release", { value });
     }
 
@@ -66,7 +67,10 @@
     <div
         class="synth-knob"
         class:dragging={isDragging}
-        on:mousedown={handleMouseDown}
+        on:pointerdown={handlePointerDown}
+        on:pointermove={handlePointerMove}
+        on:pointerup={handlePointerUp}
+        on:pointercancel={handlePointerUp}
         on:wheel={handleWheel}
         role="slider"
         aria-valuenow={value}

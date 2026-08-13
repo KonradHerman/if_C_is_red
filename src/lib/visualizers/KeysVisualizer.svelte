@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activeColorMap } from '../colorMappings';
+  import { activeColorMap, colorForNote } from '../colorMappings';
   import { pitchClass } from '../noteGeometry';
   import type { ActiveNote } from '../stores';
 
@@ -33,7 +33,7 @@
       {#each whiteNotes as n, i (n)}
         {@const v = velocityFor(n)}
         {@const pc = pitchClass(n)}
-        {@const c = $activeColorMap[pc] || '#888'}
+        {@const c = colorForNote(n, $activeColorMap)}
         <div
           class="white"
           class:c-key={pc === 0}
@@ -53,7 +53,7 @@
       {#each blackNotes as n (n)}
         {@const v = velocityFor(n)}
         {@const pc = pitchClass(n)}
-        {@const c = $activeColorMap[pc] || '#222'}
+        {@const c = colorForNote(n, $activeColorMap)}
         {@const w = whiteIndex.get(n - 1) ?? 0}
         <div
           class="black"

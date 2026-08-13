@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { activeColorMap } from '../colorMappings';
-  import { noteXPosition, noteYPosition, pitchClass } from '../noteGeometry';
+  import { activeColorMap, colorForNote } from '../colorMappings';
+  import { noteXPosition, noteYPosition } from '../noteGeometry';
   import type { ActiveNote } from '../stores';
 
   export let activeNotes: Map<string | number, ActiveNote> = new Map();
@@ -12,7 +12,7 @@
   const cfg = { viewBoxWidth, viewBoxHeight, middleOctave: 5, octaveCount: 9 };
 
   function color(noteNumber: number, map: string[]): string {
-    return map[pitchClass(noteNumber)] || '#888';
+    return colorForNote(noteNumber, map);
   }
 </script>
 

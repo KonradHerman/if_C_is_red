@@ -17,11 +17,11 @@ export const COLOR_MAPPINGS: ColorMapping[] = [
   {
     id: 'if-c-is-red',
     name: 'If C Is Red',
-    description: 'The original palette — a warm chromatic rainbow pinned at C.',
+    description: 'The original palette — a vivid chromatic rainbow pinned at C.',
     colors: [
-      '#db3132', '#d54bfa', '#9f70f9', '#819afe',
-      '#61acd7', '#7bd8bc', '#7bd559', '#8fd833',
-      '#afbc2e', '#d4a426', '#e88e20', '#e3936e',
+      '#d02f33', '#bd00f5', '#a242ff', '#657aff',
+      '#2e91fb', '#00b9b9', '#00cf65', '#00de00',
+      '#bed100', '#fab900', '#ffad37', '#f3ad80',
     ],
   },
   {
@@ -107,4 +107,120 @@ activeColorMap.subscribe((c) => { currentColors = c; });
 export function colorFor(noteNumber: number): string {
   const pc = ((noteNumber % 12) + 12) % 12;
   return currentColors[pc] || '#888';
+}
+
+// ============================================================
+// Octave tint
+// ============================================================
+//
+// The palette is the "base scale" at octave 4 (MIDI 60-71, the octave of
+// middle C). Octaves below darken toward black; octaves above wash toward
+// white and lose saturation.
+//
+// Fit against the reference render, whose measured per-octave means are
+// L = 0.15 / 0.29 / 0.53 / 0.80 / 0.83 and S = 0.95 / 0.67 / 0.96 / 0.76 / 0.43.
+// Downward is a clean geometric ramp (L × 0.53 per octave reproduces 0.29
+// and 0.15). Upward is NOT geometric — the first octave jumps most of the
+// way to white and later ones barely move — so those are table-driven.
+
+const BASE_OCTAVE = 4;
+
+/**
+ * Remaining-headroom-to-white multiplier, indexed by octaves above base.
+ *
+ * Pitch is tied to lightness, so this has to keep falling across the whole
+ * playable range — every octave up must read as visibly lighter than the last.
+ * Fitting the reference image directly gave [1, .43, .36, .32, .30], which
+ * plateaus after one octave: the top three octaves landed at the same
+ * lightness and separated only by losing saturation, which reads as muddy tan
+ * rather than pastel. The image only spanned five octaves, so its own plateau
+ * was never meant to carry the top of a piano.
+ */
+const UP_LIGHTNESS = [1, 0.55, 0.35, 0.22, 0.15];
+/**
+ * Saturation multiplier, indexed by octaves above base. A pastel is light AND
+ * still coloured; draining saturation is what turns a light warm hue into tan,
+ * so high notes keep well over half their colour.
+ */
+const UP_SATURATION = [1, 0.88, 0.76, 0.66, 0.58];
+/**
+ * Saturation multiplier, indexed by octaves BELOW base. Not monotonic on
+ * purpose: the octave just under the base scale is the reference's muted
+ * transition band (slate blues, gray-greens, olives), while lower octaves
+ * are dark enough that the reference keeps their hues near-pure.
+ */
+const DOWN_SATURATION = [1, 0.55, 0.90, 1, 1];
+
+function ramp(table: number[], d: number): number {
+  return table[Math.min(d, table.length - 1)];
+}
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return { h: 0, s: 0, l: 0.5 };
+  const v = parseInt(m[1], 16);
+  const r = ((v >> 16) & 255) / 255;
+  const g = ((v >> 8) & 255) / 255;
+  const b = (v & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r)      h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else                h = ((r - g) / d + 4) / 6;
+  return { h, s, l };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, t: number): number => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  let r: number, g: number, b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const to255 = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0');
+  return `#${to255(r)}${to255(g)}${to255(b)}`;
+}
+
+/** Apply the octave light/dark ramp to a base pitch-class color. */
+export function octaveTint(hex: string, noteNumber: number): string {
+  const oct = Math.floor(noteNumber / 12) - 1; // MIDI: C4 = 60 -> octave 4
+  const d = oct - BASE_OCTAVE;
+  if (d === 0) return hex;
+  const { h, s, l } = hexToHsl(hex);
+  if (d < 0) {
+    return hslToHex(
+      h,
+      s * ramp(DOWN_SATURATION, -d),
+      Math.max(0.08, l * Math.pow(0.53, -d)),
+    );
+  }
+  const newL = Math.min(0.95, 1 - (1 - l) * ramp(UP_LIGHTNESS, d));
+  return hslToHex(h, s * ramp(UP_SATURATION, d), newL);
+}
+
+/**
+ * Octave-tinted color for a MIDI note. Pass the reactive `$activeColorMap`
+ * from components so palette switches re-render; canvas render loops may
+ * omit it and get the current palette.
+ */
+export function colorForNote(noteNumber: number, palette: string[] = currentColors): string {
+  const pc = ((noteNumber % 12) + 12) % 12;
+  return octaveTint(palette[pc] || '#888', noteNumber);
 }
